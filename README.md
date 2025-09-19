@@ -11,6 +11,16 @@
 
 </div>
 
+# AutoGen Local Fork
+
+> **🔗 Fork Notice**: This is a personal fork of [Microsoft's AutoGen](https://github.com/microsoft/autogen) with custom modifications and experiments. For the official AutoGen framework, please visit the [original repository](https://github.com/microsoft/autogen).
+
+## Custom Additions
+
+This fork includes:
+- **Multi-Agent Planning Framework** (`planning_discussion.py`) - A specialized system for design reviews and planning discussions with different agent personas (Product Manager, Architect, Developer, QA Engineer, Project Manager)
+- **Basic Testing Framework** (`test_basic.py`) - Verification tools for AutoGen installation and functionality
+
 # AutoGen
 
 **AutoGen** is a framework for creating multi-agent AI applications that can act autonomously or work alongside humans.
