@@ -18,7 +18,12 @@
     "start": "node dist/index.js",
     "infrastructure:setup": "docker-compose up -d redis kafka",
     "infrastructure:down": "docker-compose down",
-    "workspace:demo": "ts-node src/demo/workspace-demo.ts"
+    "workspace:demo": "ts-node src/demo/workspace-demo.ts",
+    "dashboard:start": "REDIS_HOST=localhost REDIS_PORT=6380 KAFKA_BROKERS=localhost:9092 KAFKAJS_NO_PARTITIONER_WARNING=1 node dist/dashboard/DashboardServer.js",
+    "dashboard:test": "npm run build && npm run dashboard:start",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "keywords": [
     "autogen",
@@ -33,17 +38,22 @@
   "author": "AutoGen Local Fork",
   "license": "MIT",
   "dependencies": {
+    "events": "^3.3.0",
+    "express": "^5.1.0",
     "ioredis": "^5.3.2",
     "kafkajs": "^2.2.4",
-    "events": "^3.3.0"
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@playwright/test": "^1.55.0",
+    "@types/express": "^5.0.3",
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.19.17",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
     "eslint": "^8.54.0",
     "jest": "^29.7.0",
-    "@types/jest": "^29.5.8",
+    "playwright": "^1.55.0",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.2"
@@ -74,7 +84,9 @@
   },
   "eslintConfig": {
     "parser": "@typescript-eslint/parser",
-    "plugins": ["@typescript-eslint"],
+    "plugins": [
+      "@typescript-eslint"
+    ],
     "extends": [
       "eslint:recommended",
       "@typescript-eslint/recommended"

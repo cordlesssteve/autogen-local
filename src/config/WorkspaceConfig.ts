@@ -329,14 +329,14 @@ export class WorkspaceConfigPresets {
   static testing(): WorkspaceConfiguration {
     return new WorkspaceConfigBuilder()
       .withRedis({
-        host: 'localhost',
-        port: 6379,
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6380'), // Use test Redis port by default
         db: 15, // Use high DB number for testing
         lockTimeoutMs: 5000,
         heartbeatIntervalMs: 1000
       })
       .withKafka({
-        brokers: ['localhost:9092'],
+        brokers: (process.env.KAFKA_BROKERS || 'localhost:9093').split(','), // Use test Kafka port by default
         clientId: 'autogen-test',
         groupId: 'autogen-test-group'
       })

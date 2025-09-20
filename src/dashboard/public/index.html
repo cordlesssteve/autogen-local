@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Orchestration Dashboard</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.8rem;
+            font-weight: 300;
+        }
+
+        .status-badges {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .badge.online { background: #10b981; }
+        .badge.offline { background: #ef4444; }
+        .badge.degraded { background: #f59e0b; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            height: calc(100vh - 80px);
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 1rem;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .conversation-view {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            min-height: 400px;
+        }
+
+        .sidebar {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 1rem;
+        }
+
+        .agents-panel, .consensus-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .agent-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .agent-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .agent-status {
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .status-idle { background: #6b7280; }
+        .status-active { background: #10b981; }
+        .status-busy {
+            background: #f59e0b;
+            animation: pulse 2s infinite;
+        }
+        .status-error { background: #ef4444; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .agent-model {
+            font-size: 0.85rem;
+            color: #d1d5db;
+            margin-bottom: 0.5rem;
+        }
+
+        .agent-activity {
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        .message {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+
+        .message.question {
+            background: rgba(59, 130, 246, 0.2);
+            border-left-color: #3b82f6;
+        }
+
+        .message.response {
+            background: rgba(16, 185, 129, 0.2);
+            border-left-color: #10b981;
+        }
+
+        .message.system {
+            background: rgba(107, 114, 128, 0.2);
+            border-left-color: #6b7280;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .message-author {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        .message-content {
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .input-group input::placeholder, .input-group textarea::placeholder {
+            color: #9ca3af;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .consensus-vote {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .vote-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .vote-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .vote-agree { background: #10b981; }
+        .vote-disagree { background: #ef4444; }
+        .vote-abstain { background: #6b7280; }
+
+        .vote-reasoning {
+            font-size: 0.85rem;
+            color: #d1d5db;
+            font-style: italic;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            padding: 2rem;
+        }
+
+        .response-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 1000;
+        }
+
+        .connected { background: #10b981; }
+        .disconnected { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <div id="connectionStatus" class="connection-status disconnected">
+        <i class="fas fa-wifi"></i> Connecting...
+    </div>
+
+    <header class="header">
+        <h1>
+            <i class="fas fa-brain"></i>
+            Multi-Agent Orchestration Dashboard
+        </h1>
+        <div class="status-badges">
+            <div id="redisStatus" class="badge offline">
+                <i class="fas fa-database"></i> Redis
+            </div>
+            <div id="kafkaStatus" class="badge offline">
+                <i class="fas fa-stream"></i> Kafka
+            </div>
+            <div id="overallStatus" class="badge offline">
+                <i class="fas fa-server"></i> System
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard">
+        <div class="main-content">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <h2 class="panel-title">
+                    <i class="fas fa-play-circle"></i>
+                    Mission Control
+                </h2>
+
+                <div class="input-group">
+                    <label for="questionInput">Ask the AI Team:</label>
+                    <textarea
+                        id="questionInput"
+                        rows="3"
+                        placeholder="e.g., Should we build a mobile app or improve our web platform?"
+                    ></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label for="contextInput">Context (JSON):</label>
+                    <textarea
+                        id="contextInput"
+                        rows="2"
+                        placeholder='{"budget": "$150k", "timeline": "3 months", "users": "80% web, 20% mobile"}'
+                    ></textarea>
+                </div>
+
+                <button id="askButton" class="btn btn-primary">
+                    <i class="fas fa-comments"></i>
+                    Start AI Discussion
+                </button>
+
+                <hr style="margin: 1.5rem 0; border: 1px solid rgba(255,255,255,0.2);">
+
+                <div class="input-group">
+                    <label for="proposalInput">Consensus Proposal:</label>
+                    <textarea
+                        id="proposalInput"
+                        rows="2"
+                        placeholder="e.g., Prioritize mobile app development for Q1 2025"
+                    ></textarea>
+                </div>
+
+                <button id="consensusButton" class="btn btn-success">
+                    <i class="fas fa-vote-yea"></i>
+                    Start AI Consensus Vote
+                </button>
+            </div>
+
+            <!-- Conversation View -->
+            <div class="conversation-view">
+                <h2 class="panel-title">
+                    <i class="fas fa-comments"></i>
+                    Live AI Conversation
+                </h2>
+                <div id="conversationMessages">
+                    <div class="empty-state">
+                        <i class="fas fa-robot" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <p>Ready to start your first AI discussion!</p>
+                        <p style="font-size: 0.9rem; margin-top: 0.5rem;">Your AI agents are standing by...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <!-- Agents Panel -->
+            <div class="agents-panel">
+                <h2 class="panel-title">
+                    <i class="fas fa-users"></i>
+                    AI Agent Team
+                </h2>
+                <div id="agentsList">
+                    <!-- Agents will be populated here -->
+                </div>
+                <button id="initButton" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-power-off"></i>
+                    Initialize AI Workspace
+                </button>
+            </div>
+
+            <!-- Consensus Panel -->
+            <div class="consensus-panel">
+                <h2 class="panel-title">
+                    <i class="fas fa-balance-scale"></i>
+                    AI Consensus Tracking
+                </h2>
+                <div id="consensusVotes">
+                    <div class="empty-state">
+                        <i class="fas fa-vote-yea" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                        <p>No votes yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class MultiAgentDashboard {
+            constructor() {
+                this.socket = io();
+                this.session = null;
+                this.isConnected = false;
+
+                this.setupSocketListeners();
+                this.setupUIEventListeners();
+            }
+
+            setupSocketListeners() {
+                this.socket.on('connect', () => {
+                    this.isConnected = true;
+                    this.updateConnectionStatus();
+                });
+
+                this.socket.on('disconnect', () => {
+                    this.isConnected = false;
+                    this.updateConnectionStatus();
+                });
+
+                this.socket.on('session_update', (session) => {
+                    this.session = session;
+                    this.updateUI();
+                });
+
+                this.socket.on('agent_status', (data) => {
+                    this.updateAgentStatus(data.agentId, data.status, data.activity);
+                });
+
+                this.socket.on('new_message', (message) => {
+                    this.addMessage(message);
+                });
+
+                this.socket.on('consensus_vote', (vote) => {
+                    this.addConsensusVote(vote);
+                });
+
+                this.socket.on('infrastructure_status', (status) => {
+                    this.updateInfrastructureStatus(status);
+                });
+
+                this.socket.on('workspace_initialized', () => {
+                    this.showToast('✅ AI Workspace initialized successfully!', 'success');
+                });
+
+                this.socket.on('workspace_error', (data) => {
+                    this.showToast(`❌ Error: ${data.error}`, 'error');
+                });
+
+                this.socket.on('question_started', (data) => {
+                    this.addMessage({
+                        id: 'q_' + Date.now(),
+                        timestamp: Date.now(),
+                        agentId: 'user',
+                        agentName: 'You',
+                        model: 'human',
+                        content: data.question,
+                        responseTime: 0,
+                        type: 'question'
+                    });
+                });
+
+                this.socket.on('consensus_started', (data) => {
+                    this.addMessage({
+                        id: 'c_' + Date.now(),
+                        timestamp: Date.now(),
+                        agentId: 'system',
+                        agentName: 'System',
+                        model: 'system',
+                        content: `Starting consensus vote: "${data.proposal}"`,
+                        responseTime: 0,
+                        type: 'system'
+                    });
+                    this.clearConsensusVotes();
+                });
+            }
+
+            setupUIEventListeners() {
+                document.getElementById('initButton').addEventListener('click', () => {
+                    this.socket.emit('initialize_workspace', { workspaceId: 'dashboard-session' });
+                });
+
+                document.getElementById('askButton').addEventListener('click', () => {
+                    this.askQuestion();
+                });
+
+                document.getElementById('consensusButton').addEventListener('click', () => {
+                    this.startConsensus();
+                });
+
+                // Enter key handling
+                document.getElementById('questionInput').addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        this.askQuestion();
+                    }
+                });
+            }
+
+            askQuestion() {
+                const question = document.getElementById('questionInput').value.trim();
+                const contextStr = document.getElementById('contextInput').value.trim();
+
+                if (!question) {
+                    this.showToast('Please enter a question', 'error');
+                    return;
+                }
+
+                let context = {};
+                if (contextStr) {
+                    try {
+                        context = JSON.parse(contextStr);
+                    } catch (e) {
+                        this.showToast('Invalid JSON in context field', 'error');
+                        return;
+                    }
+                }
+
+                fetch('/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, context })
+                }).then(response => response.json())
+                  .then(data => {
+                      if (data.success) {
+                          document.getElementById('questionInput').value = '';
+                          this.showToast('✅ AI discussion completed!', 'success');
+                      } else {
+                          this.showToast(`❌ Error: ${data.error}`, 'error');
+                      }
+                  });
+            }
+
+            startConsensus() {
+                const proposal = document.getElementById('proposalInput').value.trim();
+
+                if (!proposal) {
+                    this.showToast('Please enter a proposal', 'error');
+                    return;
+                }
+
+                const proposalId = 'proposal_' + Date.now();
+
+                fetch('/api/consensus', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ proposalId, proposal })
+                }).then(response => response.json())
+                  .then(data => {
+                      if (data.success) {
+                          document.getElementById('proposalInput').value = '';
+                          this.showToast('✅ AI consensus completed!', 'success');
+                      } else {
+                          this.showToast(`❌ Error: ${data.error}`, 'error');
+                      }
+                  });
+            }
+
+            updateConnectionStatus() {
+                const statusEl = document.getElementById('connectionStatus');
+                if (this.isConnected) {
+                    statusEl.className = 'connection-status connected';
+                    statusEl.innerHTML = '<i class="fas fa-wifi"></i> Connected';
+                } else {
+                    statusEl.className = 'connection-status disconnected';
+                    statusEl.innerHTML = '<i class="fas fa-wifi"></i> Disconnected';
+                }
+            }
+
+            updateUI() {
+                if (!this.session) return;
+
+                this.updateAgentsList();
+                this.updateInfrastructureStatus(this.session.infrastructureStatus);
+            }
+
+            updateAgentsList() {
+                const container = document.getElementById('agentsList');
+
+                if (!this.session.agents.length) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-robot" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                            <p>No agents loaded</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = this.session.agents.map(agent => `
+                    <div class="agent-card" id="agent-${agent.id}">
+                        <div class="agent-header">
+                            <div class="agent-name">${agent.name}</div>
+                            <div class="agent-status status-${agent.status}">${agent.status}</div>
+                        </div>
+                        <div class="agent-model">
+                            <i class="fas fa-microchip"></i> ${agent.model}
+                        </div>
+                        <div class="agent-activity">${agent.lastActivity}</div>
+                        ${agent.lastResponse ? `
+                            <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                                <div style="font-size: 0.8rem; color: #d1d5db;">"${agent.lastResponse}"</div>
+                                ${agent.responseTime ? `<div class="response-time">${agent.responseTime}ms</div>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            updateAgentStatus(agentId, status, activity) {
+                const agentCard = document.getElementById(`agent-${agentId}`);
+                if (agentCard) {
+                    const statusEl = agentCard.querySelector('.agent-status');
+                    const activityEl = agentCard.querySelector('.agent-activity');
+
+                    statusEl.className = `agent-status status-${status}`;
+                    statusEl.textContent = status;
+                    activityEl.textContent = activity;
+                }
+            }
+
+            updateInfrastructureStatus(status) {
+                document.getElementById('redisStatus').className = `badge ${status.redis ? 'online' : 'offline'}`;
+                document.getElementById('kafkaStatus').className = `badge ${status.kafka ? 'online' : 'offline'}`;
+                document.getElementById('overallStatus').className = `badge ${
+                    status.overall === 'healthy' ? 'online' :
+                    status.overall === 'degraded' ? 'degraded' : 'offline'
+                }`;
+            }
+
+            addMessage(message) {
+                const container = document.getElementById('conversationMessages');
+
+                // Remove empty state
+                const emptyState = container.querySelector('.empty-state');
+                if (emptyState) {
+                    emptyState.remove();
+                }
+
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${message.type}`;
+                messageEl.innerHTML = `
+                    <div class="message-header">
+                        <div class="message-author">
+                            <i class="fas ${this.getAgentIcon(message.agentId)}"></i>
+                            ${message.agentName}
+                            ${message.model !== 'human' && message.model !== 'system' ? `<span style="font-size: 0.8rem; color: #9ca3af;">(${message.model})</span>` : ''}
+                        </div>
+                        <div class="message-time">
+                            ${new Date(message.timestamp).toLocaleTimeString()}
+                            ${message.responseTime > 0 ? `• ${message.responseTime}ms` : ''}
+                        </div>
+                    </div>
+                    <div class="message-content">${message.content}</div>
+                `;
+
+                container.appendChild(messageEl);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            addConsensusVote(vote) {
+                const container = document.getElementById('consensusVotes');
+
+                // Remove empty state
+                const emptyState = container.querySelector('.empty-state');
+                if (emptyState) {
+                    emptyState.remove();
+                }
+
+                const voteEl = document.createElement('div');
+                voteEl.className = 'consensus-vote';
+                voteEl.innerHTML = `
+                    <div class="vote-header">
+                        <div>${vote.agentName}</div>
+                        <div class="vote-badge vote-${vote.vote}">${vote.vote}</div>
+                    </div>
+                    <div class="vote-reasoning">"${vote.reasoning}"</div>
+                `;
+
+                container.appendChild(voteEl);
+            }
+
+            clearConsensusVotes() {
+                const container = document.getElementById('consensusVotes');
+                container.innerHTML = '';
+            }
+
+            getAgentIcon(agentId) {
+                const icons = {
+                    'user': 'fa-user',
+                    'system': 'fa-cog',
+                    'business-strategist': 'fa-chart-line',
+                    'tech-architect': 'fa-drafting-compass',
+                    'code-engineer': 'fa-code'
+                };
+                return icons[agentId] || 'fa-robot';
+            }
+
+            showToast(message, type) {
+                const toast = document.createElement('div');
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    padding: 1rem 1.5rem;
+                    border-radius: 8px;
+                    color: white;
+                    font-weight: 600;
+                    z-index: 1000;
+                    animation: slideIn 0.3s ease;
+                    background: ${type === 'success' ? '#10b981' : '#ef4444'};
+                `;
+                toast.textContent = message;
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+        }
+
+        // Initialize dashboard when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            new MultiAgentDashboard();
+        });
+    </script>
+
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    </style>
+</body>
+</html>
